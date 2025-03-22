@@ -1,5 +1,3 @@
-Based on the code I've reviewed, I'll create a README for your TinyStats library that showcases its features, performance benefits, and usage examples.
-
 # TinyStats
 
 TinyStats is a high-performance statistical and econometric library designed for efficient data analysis. It leverages NumPy, numba, and JAX to provide optimized implementations of common statistical operations with a focus on performance.
