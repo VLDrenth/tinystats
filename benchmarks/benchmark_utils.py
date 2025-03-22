@@ -35,8 +35,14 @@ def benchmark_function(f_optimized, f_standard, input_generator, sizes, runs=5):
             
             # Verify results match within tolerance
             if isinstance(standard_result, np.ndarray) and isinstance(optimized_result, np.ndarray):
-                assert np.allclose(standard_result, optimized_result, rtol=1e-5, atol=1e-8), \
-                    "Results don't match"
+                try:
+                    assert np.allclose(standard_result, optimized_result,rtol=1e-5, atol=1e-8,
+                                       equal_nan=True), "Results don't match"
+                except AssertionError as e:
+                    print(standard_result, optimized_result)
+                    raise e
+            else:
+                assert standard_result == optimized_result, "Results don't match"
         
         # Calculate statistics
         standard_mean = np.mean(standard_times)
@@ -57,3 +63,8 @@ def generate_matrix_inputs(size: Tuple[int, int]):
     X = np.random.random(size)
     y = np.random.random(size[0])
     return [X, y]
+
+def generate_series_inputs(size: int):
+    """Generate random arrays for processing ops."""
+    x = np.random.random(size)
+    return [x]
