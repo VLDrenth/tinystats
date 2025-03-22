@@ -15,12 +15,6 @@ TinyStats is a high-performance statistical and econometric library designed for
   - Efficient time series filtering and convolution
   - Accelerated seasonal analysis
 
-## Installation
-
-```bash
-pip install tinystats
-```
-
 ## Usage Examples
 
 ### Linear Regression
