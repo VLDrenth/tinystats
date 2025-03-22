@@ -1,17 +1,9 @@
 import time
+from typing import Tuple
 import numpy as np
 import pandas as pd
 from functools import wraps
 from contextlib import contextmanager
-
-@contextmanager
-def timer(name=None):
-    start = time.perf_counter()
-    yield
-    elapsed = time.perf_counter() - start
-    if name:
-        print(f"{name}: {elapsed:.6f} seconds")
-    return elapsed
 
 def benchmark_function(f_optimized, f_standard, input_generator, sizes, runs=5):
     """Compare execution times between optimized and numpy implementations."""
@@ -60,8 +52,8 @@ def benchmark_function(f_optimized, f_standard, input_generator, sizes, runs=5):
     
     return pd.DataFrame(results)
 
-def generate_matrix_inputs(size):
+def generate_matrix_inputs(size: Tuple[int, int]):
     """Generate random matrices for linear algebra ops."""
-    X = np.random.random((size, size//10 + 5))
-    y = np.random.random(size)
+    X = np.random.random(size)
+    y = np.random.random(size[0])
     return [X, y]

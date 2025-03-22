@@ -13,14 +13,13 @@ def ols_fit_optimized(X, y):
     model.fit(X, y)
     return model.coef_
 
-def run_ols_benchmarks():
-    sizes = [100, 1000, 10000, 100000]
+def run_ols_benchmarks(sizes: list, runs: int):
     results = benchmark_function(
         ols_fit_optimized,
         sklearn_ols,
         generate_matrix_inputs,
         sizes,
-        runs=3
+        runs=runs
     )
     return results
 

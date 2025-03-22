@@ -1,77 +1,9 @@
-import numpy as np
-import pandas as pd
-import numba
 from typing import Tuple, Union, Dict, Any
 
-@numba.njit(parallel=True, fastmath=True)
-def _ols_fit_core(X: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """
-    Core OLS fitting routine optimized with numba.
-    
-    Parameters
-    ----------
-    X : ndarray
-        Design matrix with shape (n_samples, n_features)
-    y : ndarray
-        Target vector with shape (n_samples,)
-        
-    Returns
-    -------
-    ndarray
-        Coefficient vector with shape (n_features,)
-    """
-    # Compute (X'X)^-1 X'y
-    XtX = X.T @ X
-    Xty = X.T @ y
-    beta = np.linalg.solve(XtX, Xty)
-    return beta
+import numpy as np
+import pandas as pd
 
-@numba.njit(fastmath=True)
-def _ols_stats_core(X: np.ndarray, y: np.ndarray, beta: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float, float]:
-    """
-    Calculate regression statistics optimized with numba.
-    
-    Parameters
-    ----------
-    X : ndarray
-        Design matrix with shape (n_samples, n_features)
-    y : ndarray
-        Target vector with shape (n_samples,)
-    beta : ndarray
-        Coefficient vector with shape (n_features,)
-        
-    Returns
-    -------
-    residuals : ndarray
-        Residuals vector
-    std_errors : ndarray
-        Standard errors of coefficients
-    r_squared : float
-        R-squared value
-    adj_r_squared : float
-        Adjusted R-squared value
-    """
-    n, k = X.shape
-    
-    # Calculate residuals
-    y_hat = X @ beta
-    residuals = y - y_hat
-    
-    # Calculate SSR and SST
-    SSR = np.sum(residuals**2)
-    y_mean = np.mean(y)
-    SST = np.sum((y - y_mean)**2)
-    
-    # Calculate R² and adjusted R²
-    r_squared = 1 - SSR/SST if SST != 0 else 0
-    adj_r_squared = 1 - (SSR/(n-k))/(SST/(n-1)) if (n > k and SST != 0) else 0
-    
-    # Calculate standard errors
-    sigma_squared = SSR / (n - k)
-    XtX_inv = np.linalg.inv(X.T @ X)
-    std_errors = np.sqrt(np.diag(XtX_inv) * sigma_squared)
-    
-    return residuals, std_errors, r_squared, adj_r_squared
+from tinystats.backends.backend import StatisticalBackend
 
 class OLS:
     """
@@ -104,8 +36,10 @@ class OLS:
         Adjusted R-squared score.
     """
     
-    def __init__(self, fit_intercept: bool = True):
+    def __init__(self, fit_intercept: bool = True, backend: str = "numba"):
         self.fit_intercept = fit_intercept
+        self.backend = backend
+        self._backend = StatisticalBackend(backend=backend)
         self.coef_ = None
         self.intercept_ = None
         self.residuals_ = None
@@ -154,11 +88,11 @@ class OLS:
             X_with_intercept = X_array
         
         # Fit coefficients
-        beta = _ols_fit_core(X_with_intercept, y_array)
+        beta = self._backend.get_core_function("ols_fit_core")(X_with_intercept, y_array)
         
         # Calculate statistics
-        residuals, std_errors, r_squared, adj_r_squared = _ols_stats_core(
-            X_with_intercept, y_array, beta)
+        residuals, std_errors, r_squared, adj_r_squared = self._backend.\
+        get_core_function("ols_stats_core")(X_with_intercept, y_array, beta)
         
         # Store results
         if self.fit_intercept:
