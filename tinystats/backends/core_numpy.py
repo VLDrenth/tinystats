@@ -65,10 +65,12 @@ def _ols_stats_core(X: np.ndarray, y: np.ndarray, beta: np.ndarray) -> Tuple[np.
         R-squared value
     adj_r_squared : float
         Adjusted R-squared value
+    AIC: float
+        Akaike Information Criterion
     """
     n, k = X.shape
-    
-    # Calculate residuals
+
+    # Calculate residuals using the contiguous array
     y_hat = X @ beta
     residuals = y - y_hat
     
@@ -81,22 +83,18 @@ def _ols_stats_core(X: np.ndarray, y: np.ndarray, beta: np.ndarray) -> Tuple[np.
     r_squared = 1 - SSR/SST if SST != 0 else 0
     adj_r_squared = 1 - (SSR/(n-k))/(SST/(n-1)) if (n > k and SST != 0) else 0
     
-    # Calculate standard errors
+    # Make sure X is contiguous before operations
+    X_cont = np.ascontiguousarray(X)
+
+    # Then use the contiguous array for standard errors
     sigma_squared = SSR / (n - k)
-    XtX_inv = np.linalg.inv(X.T @ X)
+    XtX_inv = np.linalg.inv(X_cont.T @ X_cont)
     std_errors = np.sqrt(np.diag(XtX_inv) * sigma_squared)
     
-    return residuals, std_errors, r_squared, adj_r_squared
-
-def _precompile():
-    """Pre-compile numba functions with small data shapes."""
-    X_small = np.eye(10, 3, dtype=np.float64)
-    y_small = np.ones(10, dtype=np.float64)
-    beta_small = np.ones(3, dtype=np.float64)
+    # Calculate AIC
+    AIC = n * np.log(SSR/n) + 2 * k
     
-    # Trigger compilation
-    _ols_fit_core(X_small, y_small)
-    _ols_stats_core(X_small, y_small, beta_small)
+    return residuals, std_errors, r_squared, adj_r_squared, AIC
 
 @njit
 def _convolve1d_numba(x, filt):
@@ -550,3 +548,304 @@ def seasonal_decompose_numba(x, model="additive", filt=None, period=None,
         'resid': resid,
         'observed': observed
     }
+
+def create_lag_matrix(x, maxlag, nobs, nvar):
+    """
+    Create a 2D array of lagged values efficiently using NumPy vectorization.
+
+    Parameters
+    ----------
+    x : ndarray
+        Input array with shape (nobs, nvar).
+    maxlag : int
+        Maximum lag to include.
+    nobs : int
+        Number of observations.
+    nvar : int
+        Number of variables.
+
+    Returns
+    -------
+    lm : ndarray
+        Lag matrix with shape (nobs + maxlag, nvar * (maxlag + 1)).
+    """
+    # Preallocate the lag matrix
+    lm = np.zeros((nobs + maxlag, nvar * (maxlag + 1)), dtype=x.dtype)
+    
+    # Use NumPy slicing for fast assignment
+    for k in range(maxlag + 1):
+        lm[maxlag - k : maxlag - k + nobs, (maxlag - k) * nvar : (maxlag - k + 1) * nvar] = x
+
+    return lm
+
+def fast_lagmat(
+    x,
+    maxlag: int,
+    trim: str = "forward",
+    original: str = "ex"
+    ):
+    """
+    Create 2d array of lags, optimized with Numba.
+
+    Parameters
+    ----------
+    x : array_like
+        Data; if 2d, observation in rows and variables in columns.
+    maxlag : int
+        All lags from zero to maxlag are included.
+    trim : {'forward', 'backward', 'both', 'none'}
+        The trimming method to use.
+    original : {'ex', 'sep', 'in'}
+        How the original is treated.
+    use_pandas : bool
+        If true, returns a DataFrame when the input is a pandas Series or DataFrame.
+        If false, return numpy ndarrays.
+
+    Returns
+    -------
+    lagmat : ndarray or DataFrame
+        The array with lagged observations.
+    y : ndarray or DataFrame, optional
+        Only returned if original == 'sep'.
+    """
+    trim = "none" if trim is None else trim.lower()
+
+    # Shape and settings
+    nobs, nvar = x.shape
+    if maxlag >= nobs:
+        raise ValueError("maxlag should be < nobs")
+    dropidx = nvar if original in ["ex", "sep"] else 0
+
+    # Create lag matrix
+    lm = create_lag_matrix(x, maxlag, nobs, nvar)
+
+    # Trim the matrix
+    if trim == "forward":
+        startobs = 0
+        stopobs = nobs
+    elif trim == "backward":
+        startobs = maxlag
+        stopobs = len(lm)
+    elif trim == "both":
+        startobs = maxlag
+        stopobs = nobs
+    elif trim == "none":
+        startobs = 0
+        stopobs = len(lm)
+    else:
+        raise ValueError("trim option not valid")
+
+    # Extract lags
+    lags = lm[startobs:stopobs, dropidx:]
+
+    if original == "sep":
+        leads = lm[startobs:stopobs, :dropidx]
+        return lags, leads
+    return lags
+
+def fast_add_trend(x, trend="c", prepend=True, has_constant="skip"):
+    """
+    Add a trend and/or constant to a NumPy array.
+
+    Parameters
+    ----------
+    x : array_like
+        Original array of data (assumed to be a NumPy array).
+    trend : str {'n', 'c', 't', 'ct', 'ctt'}
+        The trend to add: 'n' (none), 'c' (constant), 't' (linear trend),
+        'ct' (constant and linear), 'ctt' (constant, linear, quadratic).
+    prepend : bool
+        If True, prepend trend columns; otherwise, append them.
+    has_constant : str {'raise', 'add', 'skip'}
+        Controls behavior when trend includes 'c' and x has a constant column:
+        'raise' raises an error, 'skip' skips adding the constant, 'add' adds it.
+
+    Returns
+    -------
+    ndarray
+        The original data with added trend columns.
+    """
+    x = np.asarray(x)  # Faster than asanyarray since we don't need subclass preservation
+    nobs = x.shape[0]
+    
+    # Early return for 'n' trend
+    if trend == "n":
+        return x.copy()
+    
+    # Determine which trend columns to add
+    add_const = 'c' in trend
+    add_trend = 't' in trend
+    add_squared = trend == 'ctt'
+    
+    # Check for existing constant if needed
+    if add_const and has_constant in ("raise", "skip"):
+        # More efficient constant detection
+        if x.ndim == 1:
+            # For 1D arrays
+            is_const = (x == x[0]).all()
+            has_const = is_const and x[0] != 0
+        else:
+            # For 2D arrays
+            const_cols = np.all(x == x[0:1], axis=0) & (x[0] != 0)
+            has_const = np.any(const_cols)
+        
+        if has_const:
+            if has_constant == "raise":
+                if x.ndim == 1:
+                    raise ValueError(f"x is constant. Adding a constant with trend='{trend}' is not allowed.")
+                else:
+                    const_cols_indices = np.where(const_cols)[0]
+                    const_cols_str = ", ".join(map(str, const_cols_indices))
+                    raise ValueError(f"x contains constant columns: {const_cols_str}. Adding a constant with trend='{trend}' is not allowed.")
+            elif has_constant == "skip":
+                add_const = False
+    
+    # Prepare trend columns
+    trend_cols = []
+    
+    if add_const:
+        trend_cols.append(np.ones((nobs, 1)))
+    
+    if add_trend:
+        trend_cols.append(np.arange(1, nobs + 1).reshape(-1, 1))
+    
+    if add_squared:
+        # Use broadcasting for efficient squaring
+        trend_cols.append((np.arange(1, nobs + 1)**2).reshape(-1, 1))
+    
+    # If no columns to add, return original
+    if not trend_cols:
+        return x.copy()
+    
+    # Combine trend columns
+    trendarr = np.hstack(trend_cols) if len(trend_cols) > 1 else trend_cols[0]
+    
+    # Handle 1D arrays correctly
+    if x.ndim == 1:
+        x = x.reshape(-1, 1)
+    
+    # Concatenate based on prepend
+    if prepend:
+        return np.hstack([trendarr, x])  # trendarr first, then x
+        
+    else:
+        return np.hstack([x, trendarr])  # x first, then trendarr
+
+def adfuller_numba(x, maxlag=None, regression='c', autolag='AIC'):
+    """
+    Numba-optimized Augmented Dickey-Fuller test statistic calculation.
+    
+    This function focuses only on calculating the ADF test statistic,
+    without p-values or critical values.
+    
+    Parameters
+    ----------
+    x : array_like, 1d
+        The data series to test.
+    maxlag : {None, int}
+        Maximum lag which is included in test, default value of
+        12*(nobs/100)^{1/4} is used when ``None``.
+    regression : {"c", "ct", "ctt", "n"}
+        Constant and trend order to include in regression.
+    autolag : {"AIC", "BIC", "t-stat", None}
+        Method to use when automatically determining the lag length.
+        
+    Returns
+    -------
+    adfstat : float
+        The test statistic.
+    usedlag : int
+        The number of lags used.
+    """
+    # Ensure x is a numpy array
+    x = np.asarray(x)
+    
+    if x.ndim != 1:
+        raise ValueError("x must be a 1-dimensional array")
+    
+    if x.max() == x.min():
+        raise ValueError("Invalid input, x is constant")
+    
+    # Calculate maximum lag if not provided
+    nobs = x.shape[0]
+    ntrend = len(regression) if regression != "n" else 0
+    
+    if maxlag is None:
+        # from Greene
+        maxlag = int(np.ceil(12.0 * np.power(nobs / 100.0, 1 / 4.0)))
+        # -1 for the diff
+        maxlag = min(nobs // 2 - ntrend - 1, maxlag)
+        if maxlag < 0:
+            raise ValueError("sample size is too short to use selected regression component")
+    elif maxlag > nobs // 2 - ntrend - 1:
+        raise ValueError("maxlag must be less than (nobs/2 - 1 - ntrend) where ntrend is the number of included deterministic regressors")
+    
+    # First difference of the series
+    xdiff = np.diff(x)
+    
+    # Create lag matrix
+    xdall = fast_lagmat(xdiff[:, None], maxlag, trim='both', original='in')
+    nobs = xdall.shape[0]
+    
+    # Replace first column with levels
+    xdall[:, 0] = x[-nobs - 1 : -1]
+    xdshort = xdiff[-nobs:]
+    
+    if autolag is not None:
+        autolag = autolag.lower()
+        
+        # Add trend for regression
+        if regression != "n":
+            fullRHS = fast_add_trend(xdall, regression, prepend=True)
+        else:
+            fullRHS = xdall
+        
+        startlag = fullRHS.shape[1] - xdall.shape[1] + 1
+        
+        # Initialize variables for autolag search
+        best_lag = 0
+        best_ic = np.inf
+        
+        # Loop through different lag lengths to find the optimal lag
+        for lag in range(startlag, maxlag + startlag + 1):
+            # Use only lag columns
+            current_xdall = fullRHS[:, :lag]
+            
+            # Get OLS parameter
+            beta = _ols_fit_core(current_xdall, xdshort)
+
+            if autolag == 'aic':
+                ic = _ols_stats_core(current_xdall, xdshort, beta)[-1]
+            else:
+                raise ValueError("No other IC implemented")
+            
+            # Check if this lag gives a better information criterion
+            if ic < best_ic and (autolag == 'aic' or autolag == 'bic'):
+                best_ic = ic
+                best_lag = lag - startlag
+        
+        usedlag = best_lag
+    else:
+        usedlag = maxlag
+    
+    # Re-run OLS with best lag
+    xdall = fast_lagmat(xdiff[:, None], usedlag, trim='both', original='in')
+    nobs = xdall.shape[0]
+    xdall[:, 0] = x[-nobs - 1 : -1]
+    xdshort = xdiff[-nobs:]
+    
+    # Final regression
+    if regression != "n":
+        rhs = fast_add_trend(xdall[:, : usedlag + 1], regression)
+    else:
+        rhs = xdall[:, : usedlag + 1]
+    
+    # Calculate final parameters and t-statistic
+    beta = _ols_fit_core(rhs, xdshort)
+    standard_error = _ols_stats_core(rhs, xdshort, beta)[1]
+    tvalues = beta / standard_error
+    
+    # ADF test statistic is the t-statistic on the first parameter (non-intercept)
+    adfstat = tvalues[1]
+    
+    return adfstat, usedlag, best_ic
