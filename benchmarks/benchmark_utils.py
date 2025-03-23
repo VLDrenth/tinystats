@@ -34,14 +34,12 @@ def benchmark_function(f_optimized, f_standard, input_generator, sizes, runs=5):
             optimized_times.append(time.perf_counter() - start)
             
             # Verify results match within tolerance
-            if isinstance(standard_result, np.ndarray) and isinstance(optimized_result, np.ndarray):
-                try:
-                    assert np.allclose(standard_result, optimized_result,rtol=1e-5, atol=1e-8,
-                                       equal_nan=True), "Results don't match"
-                except AssertionError as e:
-                    print(standard_result, optimized_result)
-                    raise e
-            else:
+            try:
+                assert np.allclose(standard_result, optimized_result,rtol=1e-5, atol=1e-8,
+                                    equal_nan=True), "Results don't match"
+            except AssertionError as e:
+                print(standard_result, optimized_result)
+                
                 assert standard_result == optimized_result, "Results don't match"
         
         # Calculate statistics
