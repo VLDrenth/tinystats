@@ -4,6 +4,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
+jax.config.update("jax_enable_x64", True)
 
 @jax.jit
 def _ols_fit_core_jax(X: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
@@ -95,10 +96,12 @@ def _ols_stats_core_jax(X: jnp.ndarray, y: jnp.ndarray, beta: jnp.ndarray) -> Tu
 
 def _precompile_jax():
     """Pre-compile JAX functions with small data shapes."""
-    # Use jnp.array to create JAX arrays
-    X_small = jnp.eye(10, 3)
-    y_small = jnp.ones(10)
+    sizes = [(10, 5)]
     
-    # First call to trigger compilation
-    beta_small = _ols_fit_core_jax(X_small, y_small)
-    _ = _ols_stats_core_jax(X_small, y_small, beta_small)
+    for size in sizes:
+        X_small = np.random.random(size)
+        y_small = np.random.random(size[0])
+    
+        # First call to trigger compilation
+        beta_small = _ols_fit_core_jax(X_small, y_small)
+        _ = _ols_stats_core_jax(X_small, y_small, beta_small)
