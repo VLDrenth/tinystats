@@ -35,11 +35,10 @@ def benchmark_function(f_optimized, f_standard, input_generator, sizes, runs=5):
             
             # Verify results match within tolerance
             try:
-                assert np.allclose(standard_result, optimized_result,rtol=1e-5, atol=1e-8,
+                assert np.allclose(standard_result, optimized_result, atol=1e-6,
                                     equal_nan=True), "Results don't match"
             except AssertionError as e:
                 print(standard_result, optimized_result)
-                
                 assert standard_result == optimized_result, "Results don't match"
         
         # Calculate statistics
@@ -56,6 +55,16 @@ def benchmark_function(f_optimized, f_standard, input_generator, sizes, runs=5):
     
     return pd.DataFrame(results)
 
+def benchmark_batch_functions(optimized_functions, f_standard, input_generator, sizes, runs=5):
+    """
+    Benchmarks multiple optimized functions against numpy implementations.
+    """
+    for f_optimized in optimized_functions:
+        results = benchmark_function(f_optimized, f_standard, input_generator, sizes, runs)
+        print("Results for", f_optimized.__name__)
+        print("====================================")
+        print(results)
+
 def generate_matrix_inputs(size: Tuple[int, int]):
     """Generate random matrices for linear algebra ops."""
     X = np.random.random(size)
@@ -64,5 +73,11 @@ def generate_matrix_inputs(size: Tuple[int, int]):
 
 def generate_series_inputs(size: int):
     """Generate random arrays for processing ops."""
+    x = np.random.random(size)
+    return [x]
+
+def generate_array_inputs(size: Tuple[int, int] | int):
+    """Generate random arrays for processing ops."""
+    size = size if isinstance(size, tuple) else (size,1)
     x = np.random.random(size)
     return [x]

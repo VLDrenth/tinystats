@@ -1,5 +1,5 @@
 import numpy as np
-from benchmarks.benchmark_utils import benchmark_function, generate_series_inputs
+from benchmarks.benchmark_utils import benchmark_function, generate_series_inputs, benchmark_batch_functions
 from statsmodels.tsa.filters.filtertools import convolution_filter
 from statsmodels.tsa.seasonal import seasonal_mean, seasonal_decompose, _extrapolate_trend
 
@@ -28,6 +28,9 @@ def optimized_extrapolate_trend(x):
 
 def statsmodels_seasonal_decompose(x):
     return seasonal_decompose(x, period=period).resid
+
+def jax_seasonal_decompose(x):
+    return seasonal_decompose_jax(x, period=period)["resid"]
 
 def optimized_seasonal_decompose(x):
     return seasonal_decompose_numba(x, period=period)["resid"]
@@ -63,8 +66,8 @@ def run_trend_benchmarks(sizes: list, runs: int):
     return results
 
 def run_seasonal_decompose_benchmarks(sizes: list, runs: int):
-    results = benchmark_function(
-        optimized_seasonal_decompose,
+    results = benchmark_batch_functions(
+        [optimized_seasonal_decompose],
         statsmodels_seasonal_decompose,
         generate_series_inputs,
         sizes,
