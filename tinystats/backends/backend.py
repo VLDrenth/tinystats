@@ -19,18 +19,14 @@ def _load_backend(name: str) -> Dict[str, Callable]:
     """
     if name not in _BACKENDS:
         if name == "numba":
-            from .core_numpy import _ols_fit_core, _ols_stats_core, seasonal_decompose_numba, _precompile
-            # Trigger precompilation
-            _precompile()
+            from .core_numpy import _ols_fit_core, _ols_stats_core, seasonal_decompose_numba
             _BACKENDS[name] = {
                 "ols_fit_core": _ols_fit_core,
                 "ols_stats_core": _ols_stats_core,
                 "seasonal_decompose_core": seasonal_decompose_numba,
             }
         elif name == "jax":
-            from .core_jax import _ols_fit_core_jax, _ols_stats_core_jax, _precompile_jax
-            # Trigger precompilation
-            _precompile_jax()
+            from .core_jax import _ols_fit_core_jax, _ols_stats_core_jax
             _BACKENDS[name] = {
                 "ols_fit_core": _ols_fit_core_jax,
                 "ols_stats_core": _ols_stats_core_jax,
