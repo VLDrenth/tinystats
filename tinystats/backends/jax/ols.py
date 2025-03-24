@@ -1,12 +1,11 @@
-from typing import Literal, Union, Tuple, Optional
-import numpy as np
+from typing import Tuple
 import jax
 import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 
 @jax.jit
-def _ols_fit_core_jax(X: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
+def _ols_fit_core(X: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
     """
     Core OLS fitting routine optimized with JAX.
     
@@ -42,7 +41,7 @@ def _ols_fit_core_jax(X: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
     return beta
 
 @jax.jit
-def _ols_stats_core_jax(X: jnp.ndarray, y: jnp.ndarray, beta: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray, float, float]:
+def _ols_stats_core(X: jnp.ndarray, y: jnp.ndarray, beta: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray, float, float]:
     """
     Calculate regression statistics optimized with JAX.
     

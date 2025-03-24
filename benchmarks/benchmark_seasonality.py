@@ -3,8 +3,8 @@ from benchmarks.benchmark_utils import benchmark_function, generate_series_input
 from statsmodels.tsa.filters.filtertools import convolution_filter
 from statsmodels.tsa.seasonal import seasonal_mean, seasonal_decompose, _extrapolate_trend
 
-from tinystats.backends.core_numpy import convolution_filter_numba, seasonal_mean_numba,\
-    _extrapolate_trend_numba, seasonal_decompose_numba
+from tinystats.backends.numba.time_series import convolution_filter, extrapolate_trend
+from tinystats.backends.numba.seasonal import seasonal_mean, seasonal_decompose as opt_seasonal_decompose
 
 period = 12
 
@@ -12,28 +12,25 @@ def statsmodels_convolution(x):
     return convolution_filter(x=x, filt=np.repeat(1.0 / period, period))
 
 def optimized_convolution(x):
-    return convolution_filter_numba(x=x, filt=np.repeat(1.0 / period, period))
+    return convolution_filter(x=x, filt=np.repeat(1.0 / period, period))
 
 def statsmodels_seasonal_mean(x):
     return seasonal_mean(x, period=period)
 
 def optimized_seasonal_mean(x):
-    return seasonal_mean_numba(x, period=period)
+    return seasonal_mean(x, period=period)
 
 def statsmodels_extrapolate_trend(x):
     return _extrapolate_trend(x, npoints=period)
 
 def optimized_extrapolate_trend(x):
-    return _extrapolate_trend_numba(x, npoints=period)
+    return extrapolate_trend(x, npoints=period)
 
 def statsmodels_seasonal_decompose(x):
     return seasonal_decompose(x, period=period).resid
 
-def jax_seasonal_decompose(x):
-    return seasonal_decompose_jax(x, period=period)["resid"]
-
 def optimized_seasonal_decompose(x):
-    return seasonal_decompose_numba(x, period=period)["resid"]
+    return opt_seasonal_decompose(x, period=period)["resid"]
 
 def run_conv_benchmarks(sizes: list, runs: int):
     results = benchmark_function(

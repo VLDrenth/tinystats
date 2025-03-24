@@ -13,7 +13,7 @@ from typing import Union, Dict
 import numpy as np
 import pandas as pd
 
-from tinystats.backends.backend import StatisticalBackend
+from tinystats.backend import StatisticalBackend
 
 
 class SeasonalDecomposition:

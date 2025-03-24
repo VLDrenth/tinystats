@@ -3,7 +3,8 @@ from typing import Tuple, Union, Dict, Any
 import numpy as np
 import pandas as pd
 
-from tinystats.backends.backend import StatisticalBackend
+from tinystats.config import DEFAULT_BACKEND
+from ..backend import StatisticalBackend
 
 class OLS:
     """
@@ -36,10 +37,10 @@ class OLS:
         Adjusted R-squared score.
     """
     
-    def __init__(self, fit_intercept: bool = True, backend: str = "numba"):
+    def __init__(self, fit_intercept: bool = True, backend: str = None):
         self.fit_intercept = fit_intercept
         self.backend = backend
-        self._backend = StatisticalBackend(backend=backend)
+        self._backend = StatisticalBackend(backend=backend or DEFAULT_BACKEND)
         self.coef_ = None
         self.intercept_ = None
         self.residuals_ = None
@@ -88,11 +89,11 @@ class OLS:
             X_with_intercept = X_array
         
         # Fit coefficients
-        beta = self._backend.get_core_function("ols_fit_core")(X_with_intercept, y_array)
+        beta = self._backend.ols_fit_core(X_with_intercept, y_array)
         
         # Calculate statistics
-        residuals, std_errors, r_squared, adj_r_squared = self._backend.\
-        get_core_function("ols_stats_core")(X_with_intercept, y_array, beta)
+        residuals, std_errors, r_squared, adj_r_squared, _ = self._backend.\
+        ols_stats_core(X_with_intercept, y_array, beta)
         
         # Store results
         if self.fit_intercept:

@@ -1,7 +1,9 @@
-from benchmarks.benchmark_utils import benchmark_function, generate_series_inputs, generate_array_inputs, benchmark_batch_functions
+from benchmarks.benchmark_utils import generate_series_inputs, generate_array_inputs, benchmark_batch_functions
 import numpy as np
 import jax.numpy as jnp
-from tinystats.backends.core_numpy import fast_lagmat, fast_add_trend, adfuller_numba
+from tinystats.backends.numba.matrix import fast_lagmat
+from tinystats.backends.numba.time_series import add_trend as fast_add_trend
+from tinystats.backends.numba.testing import adfuller as adfuller_numba
 from statsmodels.tsa.stattools import lagmat, add_trend, adfuller
 
 maxlag = 3
@@ -44,7 +46,7 @@ def run_lagmat_benchmarks(sizes: list, runs: int):
 
 def run_add_trend_benchmarks(sizes: list, runs: int):
     results = benchmark_batch_functions(
-        [fast_add_trend],
+        [add_trend],
         statsmodels_add_trend,
         generate_series_inputs,
         sizes,

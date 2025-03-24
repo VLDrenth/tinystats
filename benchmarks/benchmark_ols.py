@@ -1,4 +1,4 @@
-from benchmarks.benchmark_utils import benchmark_function, generate_matrix_inputs, benchmark_batch_functions
+from benchmarks.benchmark_utils import generate_matrix_inputs, benchmark_batch_functions
 import numpy as np
 from tinystats.regression.linear_models import OLS
 from sklearn.linear_model import LinearRegression
