@@ -1,5 +1,4 @@
-from typing import Tuple
-
+from typing import Literal, Union, Tuple, Optional
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -93,15 +92,3 @@ def _ols_stats_core_jax(X: jnp.ndarray, y: jnp.ndarray, beta: jnp.ndarray) -> Tu
     std_errors = jnp.sqrt(jnp.diag(XtX_inv) * sigma_squared)
     
     return residuals, std_errors, r_squared, adj_r_squared
-
-def _precompile_jax():
-    """Pre-compile JAX functions with small data shapes."""
-    sizes = [(10, 5)]
-    
-    for size in sizes:
-        X_small = np.random.random(size)
-        y_small = np.random.random(size[0])
-    
-        # First call to trigger compilation
-        beta_small = _ols_fit_core_jax(X_small, y_small)
-        _ = _ols_stats_core_jax(X_small, y_small, beta_small)
