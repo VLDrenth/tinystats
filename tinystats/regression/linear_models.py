@@ -92,7 +92,7 @@ class OLS:
         beta = self._backend.ols_fit_core(X_with_intercept, y_array)
         
         # Calculate statistics
-        residuals, std_errors, r_squared, adj_r_squared, _ = self._backend.\
+        residuals, std_errors, r_squared, adj_r_squared, aic = self._backend.\
         ols_stats_core(X_with_intercept, y_array, beta)
         
         # Store results
