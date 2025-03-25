@@ -54,6 +54,8 @@ def _ols_stats_core(X: jnp.ndarray, y: jnp.ndarray, beta: jnp.ndarray) -> Tuple[
         R-squared value
     adj_r_squared : float
         Adjusted R-squared value
+    aic : float
+        Akaike Information Criterion
     """
     n, k = X.shape
     
