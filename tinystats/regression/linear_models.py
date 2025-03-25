@@ -73,13 +73,13 @@ class OLS:
             X_array = X.to_numpy()
         else:
             self._feature_names = [f'x{i}' for i in range(X.shape[1])]
-            X_array = np.asarray(X)
+            X_array = X
             
         # Convert y to numpy array
         if isinstance(y, pd.Series):
             y_array = y.to_numpy()
         else:
-            y_array = np.asarray(y)
+            y_array = y
         
         # Add intercept column if needed
         if self.fit_intercept:

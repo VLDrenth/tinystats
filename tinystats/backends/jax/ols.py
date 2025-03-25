@@ -1,8 +1,8 @@
 from typing import Tuple
+
 import jax
 import jax.numpy as jnp
-
-jax.config.update("jax_enable_x64", True)
+import lineax as lx
 
 @jax.jit
 def _ols_fit_core(X: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
@@ -23,22 +23,12 @@ def _ols_fit_core(X: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
     jnp.ndarray
         Coefficient vector with shape (n_features,)
     """
-    # Use JAX's QR decomposition for numerical stability
-    # JAX's qr returns (q, r) where q is orthogonal and r is upper triangular
-    q, r = jax.numpy.linalg.qr(X)
+    # Use QR decomposition for numerical stability
+    operator = lx.MatrixLinearOperator(X)
+    solver = lx.QR()
+    solution = lx.linear_solve(operator, y, solver, throw=False)
     
-    # Compute q.T @ y
-    # JAX automatically handles optimal memory layouts, so no need for ascontiguousarray
-    qty = q.T @ y
-    
-    # Extract the relevant part of qty (first n_features elements)
-    qty_relevant = qty[:r.shape[1]]
-    
-    # Solve the triangular system r @ beta = q.T @ y
-    # Use triangular_solve for better performance on triangular matrices
-    beta = jax.scipy.linalg.solve_triangular(r, qty_relevant, lower=False)
-    
-    return beta
+    return solution.value
 
 @jax.jit
 def _ols_stats_core(X: jnp.ndarray, y: jnp.ndarray, beta: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray, float, float]:
@@ -89,5 +79,8 @@ def _ols_stats_core(X: jnp.ndarray, y: jnp.ndarray, beta: jnp.ndarray) -> Tuple[
     sigma_squared = SSR / (n - k)
     XtX_inv = jnp.linalg.inv(X.T @ X)
     std_errors = jnp.sqrt(jnp.diag(XtX_inv) * sigma_squared)
+
+    # Calculate AIC
+    AIC = n * jnp.log(SSR/n) + 2 * k
     
-    return residuals, std_errors, r_squared, adj_r_squared
+    return residuals, std_errors, r_squared, adj_r_squared, AIC
