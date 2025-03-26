@@ -2,6 +2,7 @@ from typing import Tuple, Union, Dict, Any
 
 import numpy as np
 import pandas as pd
+import jax.numpy as jnp
 
 from tinystats.config import DEFAULT_BACKEND
 from ..backend import StatisticalBackend
@@ -37,10 +38,10 @@ class OLS:
         Adjusted R-squared score.
     """
     
-    def __init__(self, fit_intercept: bool = True, backend: str = None):
+    def __init__(self, fit_intercept: bool = True, backend: str = "numba"):
         self.fit_intercept = fit_intercept
         self.backend = backend
-        self._backend = StatisticalBackend(backend=backend or DEFAULT_BACKEND)
+        self._backend = StatisticalBackend(backend=backend)
         self.coef_ = None
         self.intercept_ = None
         self.residuals_ = None
@@ -93,7 +94,7 @@ class OLS:
         
         # Calculate statistics
         residuals, std_errors, r_squared, adj_r_squared, aic = self._backend.\
-        ols_stats_core(X_with_intercept, y_array, beta)
+        stats_core(X_with_intercept, y_array, beta)
         
         # Store results
         if self.fit_intercept:
@@ -186,3 +187,164 @@ class OLS:
             'n_observations': len(self.residuals_),
             'df_residuals': len(self.residuals_) - len(self.coef_) - (1 if self.fit_intercept else 0)
         }
+    
+
+class Ridge:
+    """
+    High-performance Ridge regression with L2 regularization.
+    
+    This implementation delegates computations to an optimized backend.
+    When using the 'numba' backend, inputs should be NumPy arrays.
+    When using the 'jax' backend, inputs should be JAX arrays.
+    
+    Parameters
+    ----------
+    alpha : float, default=1.0
+        Regularization strength; must be positive.
+        
+    fit_intercept : bool, default=True
+        Whether to calculate the intercept for this model.
+        
+    backend : str, default="numba"
+        Computational backend to use ("numba" or "jax").
+    """
+    
+    def __init__(self, alpha: float = 1.0, fit_intercept: bool = True, backend: str = "numba",
+                 validate_input: bool = False):
+        if alpha < 0:
+            raise ValueError("Alpha must be a positive value")
+            
+        self.alpha = alpha
+        self.fit_intercept = fit_intercept
+        self.backend = backend
+        self._backend = StatisticalBackend(backend=backend)
+        self.coef_ = None
+        self.intercept_ = None
+        self.residuals_ = None
+        self.std_errors_ = None
+        self.r_squared_ = None
+        self.adj_r_squared_ = None
+        self._feature_names = None
+        self._validate_input = validate_input
+
+    def fit(self, X, y):
+        """
+        Fit Ridge regression model.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Training data. Should be a NumPy array when using 'numba' backend,
+            or a JAX array when using 'jax' backend. If a DataFrame is provided,
+            it will be converted to the appropriate array type.
+            
+        y : array-like of shape (n_samples,)
+            Target values. Should match the array type requirements for X.
+            
+        Returns
+        -------
+        self : object
+            Returns self.
+        """
+        # Validate input consistent with backend
+        if self._validate_input:
+            if self.backend == "jax" and not isinstance(X, jnp.ndarray):
+                raise ValueError("Input X must be a JAX array when using the 'jax' backend")
+            elif self.backend == "numba" and not isinstance(X, np.ndarray):
+                raise ValueError("Input X must be a NumPy array when using the 'numba' backend")
+
+        # Extract feature names if available
+        if hasattr(X, 'columns'):
+            self._feature_names = X.columns.tolist()
+        else:
+            self._feature_names = [f'x_{i}' for i in range(X.shape[1])]
+                                    
+        # Add intercept column
+        if self.fit_intercept:
+            if self.backend == "jax":
+                X_with_intercept = jnp.column_stack([jnp.ones(X.shape[0]), X])
+            else:
+                X_with_intercept = np.column_stack([np.ones(X.shape[0]), X])
+            self._feature_names = ['intercept'] + self._feature_names
+        else:
+            X_with_intercept = X
+        
+        # Fit coefficients using the backend
+        beta = self._backend.ridge_fit_core(X_with_intercept, y, self.alpha)
+        
+        # Calculate statistics
+        result = self._backend.stats_core(X_with_intercept, y, beta)
+        residuals, std_errors, r_squared, adj_r_squared, aic = result
+        
+        # Convert to NumPy if needed for consistent storage
+        if self.backend == "jax":
+            beta = np.array(beta)
+            residuals = np.array(residuals)
+            std_errors = np.array(std_errors)
+            r_squared = float(r_squared)
+            adj_r_squared = float(adj_r_squared)
+        
+        # Store results
+        if self.fit_intercept:
+            self.intercept_ = beta[0]
+            self.coef_ = beta[1:]
+        else:
+            self.intercept_ = 0.0
+            self.coef_ = beta
+            
+        self.residuals_ = residuals
+        self.std_errors_ = std_errors
+        self.r_squared_ = r_squared
+        self.adj_r_squared_ = adj_r_squared
+        self.aic = aic
+        
+        return self
+    
+    def predict(self, X):
+        """
+        Predict using the Ridge regression model.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Samples for prediction. Should be a NumPy array when using 'numba' backend,
+            or a JAX array when using 'jax' backend.
+            
+        Returns
+        -------
+        ndarray of shape (n_samples,)
+            Returns predicted values.
+        """
+        if self.coef_ is None:
+            raise ValueError("Model not fitted yet. Call 'fit' first.")
+            
+        # Validate input type
+        if self._validate_input:
+            if self.backend == "jax" and not isinstance(X, jnp.ndarray):
+                raise ValueError("Input X must be a JAX array when using the 'jax' backend")
+            elif self.backend == "numba" and not isinstance(X, np.ndarray):
+                raise ValueError("Input X must be a NumPy array when using the 'numba' backend")
+        
+        # Add intercept column
+        if self.fit_intercept:
+            if self.backend == "jax":
+                X_with_intercept = jnp.column_stack([jnp.ones(X.shape[0]), X])
+                coef = jnp.concatenate([jnp.array([self.intercept_]), jnp.array(self.coef_)])
+            else:
+                X_with_intercept = np.column_stack([np.ones(X.shape[0]), X])
+                coef = np.concatenate([[self.intercept_], self.coef_])
+        else:
+            X_with_intercept = X
+            if self.backend == "jax":
+                coef = jnp.array(self.coef_)
+            else:
+                coef = self.coef_
+        
+        # Make predictions
+        predictions = X_with_intercept @ coef
+        
+        # Convert JAX predictions to NumPy for consistent return type
+        if self.backend == "jax":
+            predictions = np.array(predictions)
+            
+        return predictions

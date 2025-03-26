@@ -40,7 +40,7 @@ def _ols_fit_core(X: np.ndarray, y: np.ndarray) -> np.ndarray:
     return beta
 
 @njit
-def _ols_stats_core(X: np.ndarray, y: np.ndarray, beta: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float, float]:
+def _stats_core(X: np.ndarray, y: np.ndarray, beta: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float, float]:
     """
     Calculate regression statistics optimized with numba.
     
