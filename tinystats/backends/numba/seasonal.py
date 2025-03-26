@@ -1,3 +1,14 @@
+"""
+This file contains code based on statsmodels.
+https://github.com/statsmodels/statsmodels
+
+Copyright (c) 2009-2018 statsmodels Developers.
+All rights reserved.
+Licensed under 3-clause BSD license.
+"""
+
+
+
 import numpy as np
 from numba import njit
 from .time_series import convolution_filter, extrapolate_trend
