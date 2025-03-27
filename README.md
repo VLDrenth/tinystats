@@ -71,9 +71,12 @@ residual = components['resid']
 
 TinyStats provides significant performance improvements over standard implementations:
 
-- OLS regression: Up to 50x faster than scikit-learn for larger datasets
+- OLS regression: Up to 25x faster than scikit-learn for large dense matrices
 - Seasonal decomposition: Up to 5x faster than statsmodels
-- Convolution filters: Up to 30x faster than statsmodels
+- Convolution filters: Up to 15x faster than statsmodels
+- Stationary tests: ADF and KPSS implement 2-10x faster than statsmodels
+- (Ridge regression: Similar performance to sklearn, not yet optimized)
+
 
 ## Backend Selection
 
