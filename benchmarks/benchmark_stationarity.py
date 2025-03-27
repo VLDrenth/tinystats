@@ -1,10 +1,10 @@
-from benchmarks.benchmark_utils import generate_series_inputs, generate_array_inputs, benchmark_batch_functions
+from benchmarks.benchmark_utils import benchmark_function_across_param_grid, generate_series_inputs, generate_array_inputs, benchmark_batch_functions
 import numpy as np
 import jax.numpy as jnp
 from tinystats.backends.numba.matrix import fast_lagmat
 from tinystats.backends.numba.time_series import add_trend as fast_add_trend
-from tinystats.backends.numba.testing import adfuller as adfuller_numba
-from statsmodels.tsa.stattools import lagmat, add_trend, adfuller
+from tinystats.backends.numba.testing import adfuller as adfuller_numba, kpss as kpss_numba
+from statsmodels.tsa.stattools import lagmat, add_trend, adfuller, kpss as kpss_original
 
 maxlag = 3
 prepend = True
@@ -33,6 +33,13 @@ def statsmodels_adfuller(x, maxlag=5, regression="c"):
 def numba_adfuller(x, maxlag=5, regression="c"):
     res = adfuller_numba(x, maxlag=maxlag, regression=regression)
     return res[0]
+
+# KPSS
+def kpss_numba_(x):
+    return kpss_numba(x=x, regression="ct", nlags="auto")[0]
+
+def kpss(x):
+    return kpss_original(x=x, regression="ct", nlags="auto")[0]
 
 def run_lagmat_benchmarks(sizes: list, runs: int):
     results = benchmark_batch_functions(
@@ -63,3 +70,30 @@ def run_adfuller_benchmarks(sizes: list, runs: int):
         runs=runs
     )
     return results
+
+def run_kpss_benchmarks(sizes: list, runs: int):
+    results = benchmark_batch_functions(
+        [kpss_numba_],
+        kpss,
+        generate_series_inputs,
+        sizes,
+        runs=runs
+    )
+    return results
+
+
+def test_adf_big(sizes: list, runs: int):
+    param_grid = {
+        'regression': ['c', 'ct', 'ctt', 'n'],
+        'maxlag': [1,2, 3, 4, 5, 6, 7, 8, 9, 10, None]
+    }
+
+    # Run benchmark across parameter grid
+    results = benchmark_function_across_param_grid(
+        numba_adfuller,
+        statsmodels_adfuller,
+        generate_series_inputs,
+        param_grid=param_grid,
+        sizes=sizes,
+        runs=runs
+    )
