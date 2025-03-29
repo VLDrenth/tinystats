@@ -202,7 +202,7 @@ def _kpss_stat_numba(resids: np.ndarray, nobs: int, nlags: int) -> Tuple[float, 
     
     return kpss_stat, s_hat
 
-def kpss_numba(
+def kpss(
     x: np.ndarray,
     regression: str = "c",
     nlags: Union[str, int] = "auto",
